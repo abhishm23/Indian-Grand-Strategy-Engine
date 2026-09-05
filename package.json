@@ -1,0 +1,12 @@
+{
+  "name": "iron-tactics-14th-century",
+  "version": "1.0.0",
+  "description": "14th-Century Indian Subcontinent Grand Strategy & Tactical Warfare Game",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/testRunner.js"
+  },
+  "keywords": ["grand-strategy", "tactical-warfare", "indian-history", "14th-century"],
+  "author": "Iron Tactics Team",
+  "license": "MIT"
+}

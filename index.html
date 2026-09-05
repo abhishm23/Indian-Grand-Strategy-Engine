@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>1345 CE: Subcontinent - Grand Strategy & Tactical Warfare</title>
+  
+  <!-- Web Fonts: Medieval Display, Modern UI, Telemetry Monospace -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ================================================================= -->
+    <!-- 1. CAMPAIGN VIEW (Grand Strategy Map & Empire Management HUD)      -->
+    <!-- ================================================================= -->
+    <div id="campaign-view" class="view-container active">
+      
+      <!-- Top Empire Resource Bar -->
+      <header class="campaign-header">
+        <div class="header-section faction-identity">
+          <div class="heraldic-shield" id="hud-faction-shield">⚜️</div>
+          <div class="faction-meta">
+            <h1 id="hud-faction-name">Vijayanagara Empire</h1>
+            <span class="ruler-title" id="hud-ruler-name">Maharajadhiraja Harihara I</span>
+          </div>
+        </div>
+
+        <div class="header-section empire-resources">
+          <div class="resource-pill" title="Current Campaign Turn and Historical Year">
+            <span class="res-icon">📅</span>
+            <div class="res-body">
+              <span class="res-label">TURN</span>
+              <span class="res-value mono" id="hud-turn-val">1</span>
+            </div>
+            <div class="res-body ml-8">
+              <span class="res-label">YEAR</span>
+              <span class="res-value mono" id="hud-year-val">Spring 1345 CE</span>
+            </div>
+          </div>
+
+          <div class="resource-pill" title="Treasury Gold and Net Income per Turn">
+            <span class="res-icon">🪙</span>
+            <div class="res-body">
+              <span class="res-label">TREASURY</span>
+              <span class="res-value mono gold" id="hud-treasury-val">5,200</span>
+            </div>
+            <span class="res-delta mono pos" id="hud-income-delta">+340/t</span>
+          </div>
+
+          <div class="resource-pill" title="Available Empire Manpower Reserve">
+            <span class="res-icon">👥</span>
+            <div class="res-body">
+              <span class="res-label">MANPOWER</span>
+              <span class="res-value mono" id="hud-manpower-val">14,200</span>
+            </div>
+          </div>
+
+          <div class="resource-pill" title="Imperial Stability and Public Order Average">
+            <span class="res-icon">⚖️</span>
+            <div class="res-body">
+              <span class="res-label">STABILITY</span>
+              <span class="res-value mono" id="hud-stability-val">82%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-section quick-actions">
+          <button id="btn-open-diplomacy" class="btn btn-hud" title="Open Diplomatic Relations">
+            <span class="btn-icon">🕊️</span>
+            <span class="btn-text">Diplomacy</span>
+          </button>
+          <button id="btn-open-tech" class="btn btn-hud" title="Open Technology & Doctrines">
+            <span class="btn-icon">📜</span>
+            <span class="btn-text">Doctrines</span>
+          </button>
+          <button id="btn-open-characters" class="btn btn-hud" title="Open Character Ledger">
+            <span class="btn-icon">👑</span>
+            <span class="btn-text">Court</span>
+          </button>
+          <button id="btn-open-saveload" class="btn btn-hud" title="Save or Load Campaign">
+            <span class="btn-icon">💾</span>
+            <span class="btn-text">Save</span>
+          </button>
+          <button id="btn-audio-toggle" class="btn btn-icon-only" title="Toggle Audio">
+            <span id="audio-icon">🔊</span>
+          </button>
+        </div>
+
+        <div class="header-section end-turn-container">
+          <button id="btn-end-turn" class="btn btn-end-turn" data-action="end-turn">
+            <div class="btn-content">
+              <span class="btn-primary-text">PASS TURN</span>
+              <span class="btn-subtext mono">EXECUTE ORDERS ➔</span>
+            </div>
+          </button>
+        </div>
+      </header>
+
+      <!-- Campaign Workspace -->
+      <main class="campaign-workspace">
+        
+        <!-- Interactive 2D Campaign Map Canvas Container -->
+        <div class="map-viewport" id="map-viewport">
+          <canvas id="campaignCanvas" width="1200" height="900"></canvas>
+          
+          <!-- On-Canvas Map Controls -->
+          <div class="map-controls">
+            <button id="btn-zoom-in" class="btn-map-control" title="Zoom In">+</button>
+            <button id="btn-zoom-out" class="btn-map-control" title="Zoom Out">-</button>
+            <button id="btn-zoom-reset" class="btn-map-control" title="Reset View">⛶</button>
+          </div>
+
+          <!-- Map Layer Filter Toggles -->
+          <div class="map-layers">
+            <button class="layer-pill active" data-layer="political">Political</button>
+            <button class="layer-pill" data-layer="terrain">Terrain</button>
+            <button class="layer-pill" data-layer="resources">Trade Goods</button>
+          </div>
+
+          <!-- Map Hover Intel Banner -->
+          <div id="map-hover-intel" class="map-hover-intel hidden">
+            <span id="hover-province-name" class="font-title">Karnataka</span>
+            <span id="hover-province-faction" class="mono text-muted">Vijayanagara Empire</span>
+            <span id="hover-province-resource" class="badge-resource">💎 Diamonds</span>
+          </div>
+        </div>
+
+        <!-- Province Management Drawer (Sliding Panel) -->
+        <aside id="province-drawer" class="province-drawer collapsed">
+          <div class="drawer-drag-handle" id="drawer-toggle" data-action="drawer-toggle">
+            <span class="handle-bar"></span>
+            <span class="handle-title">PROVINCE GOVERNANCE</span>
+          </div>
+
+          <div class="drawer-content">
+            <!-- Province Header -->
+            <div class="drawer-header">
+              <div class="prov-title-block">
+                <h2 id="drawer-prov-name" class="font-title">PROV_VIJAYANAGARA</h2>
+                <div class="prov-meta-tags">
+                  <span id="drawer-prov-region" class="tag">Carnatic</span>
+                  <span id="drawer-prov-terrain" class="tag terrain">Plateau</span>
+                  <span id="drawer-prov-resource" class="tag resource">⚔️ Iron</span>
+                </div>
+              </div>
+              <button id="btn-close-drawer" class="btn-close-icon" data-action="close-drawer">✕</button>
+            </div>
+
+            <!-- Demographics & Taxation -->
+            <div class="drawer-grid">
+              <div class="governance-card">
+                <div class="card-header-sm">DEMOGRAPHICS & ECONOMY</div>
+                <div class="stat-row">
+                  <span class="label">Base Tax:</span>
+                  <span id="drawer-tax-val" class="mono bold text-gold">220 Gold</span>
+                </div>
+                <div class="stat-row">
+                  <span class="label">Tax Rate:</span>
+                  <div class="tax-rate-buttons">
+                    <button class="btn-rate" data-rate="low">Low (0.8x)</button>
+                    <button class="btn-rate active" data-rate="norm">Norm (1.0x)</button>
+                    <button class="btn-rate" data-rate="high">High (1.2x)</button>
+                  </div>
+                </div>
+                <div class="stat-row mt-6">
+                  <span class="label">Public Order:</span>
+                  <span id="drawer-public-order-val" class="mono bold">85 / 100</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div id="drawer-order-bar" class="progress-bar-fill hp" style="width: 85%;"></div>
+                </div>
+                <div id="drawer-unrest-warning" class="unrest-warning hidden">⚠️ Critical Unrest: Rebellion Imminent!</div>
+              </div>
+
+              <!-- Assigned Governor Card -->
+              <div class="governance-card governor-card">
+                <div class="card-header-sm">APPOINTED GOVERNOR</div>
+                <div class="governor-profile" id="drawer-governor-profile">
+                  <div class="char-avatar" id="drawer-gov-avatar">👑</div>
+                  <div class="char-info">
+                    <div id="drawer-gov-name" class="char-name">Bukka Raya I</div>
+                    <div class="char-stats-mini mono">
+                      <span>Gov: <strong id="drawer-gov-stat">8</strong></span>
+                      <span>Loyalty: <strong id="drawer-gov-loyalty" class="text-green">90</strong></span>
+                    </div>
+                  </div>
+                  <button id="btn-reassign-gov" class="btn btn-sm btn-secondary" data-action="reassign-governor-btn">Change</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Infrastructure & Building Slots -->
+            <div class="drawer-section mt-12">
+              <div class="section-title-bar">
+                <h3>INFRASTRUCTURE & BUILDINGS (5 CATEGORIES)</h3>
+              </div>
+              <div class="building-slots-grid" id="drawer-building-slots">
+                <!-- Dynamically populated 5 building slots: Barracks, Walls, Irrigation, Market, Shrine -->
+              </div>
+            </div>
+
+            <!-- Military Garrison & Recruitment -->
+            <div class="drawer-section mt-12">
+              <div class="section-title-bar">
+                <h3>PROVINCIAL RECRUITMENT & GARRISON</h3>
+              </div>
+              <div class="recruitment-grid">
+                <div class="recruitment-dock" id="drawer-recruitment-dock">
+                  <!-- Recruitment regiment cards -->
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </aside>
+
+        <!-- Army Inspector Card (Floating Popup when Army Token is Clicked) -->
+        <div id="army-inspector" class="floating-inspector hidden">
+          <div class="inspector-header">
+            <div class="army-banner" id="army-banner-icon">🚩</div>
+            <div class="army-details">
+              <h3 id="army-inspector-title">I Army of Vijayanagara</h3>
+              <span id="army-inspector-commander" class="text-muted">General: Bukka Raya I (Command 8)</span>
+            </div>
+            <button id="btn-close-army-inspector" class="btn-close-icon" data-action="close-army-inspector">✕</button>
+          </div>
+          
+          <div class="army-logistics-bar">
+            <div class="logistics-item">
+              <span class="label">Movement:</span>
+              <span id="army-move-pts" class="mono bold text-cyan">100 / 100 MP</span>
+            </div>
+            <div class="logistics-item">
+              <span class="label">Supply Status:</span>
+              <span id="army-supply-status" class="badge-supply ok">In Supply (Friendly Lines)</span>
+            </div>
+          </div>
+
+          <div class="regiments-scroll-dock" id="army-regiments-dock">
+            <!-- Dynamically populated regiment cards -->
+          </div>
+        </div>
+
+        <!-- Notification Ticker Feed -->
+        <div id="notification-ticker" class="notification-ticker">
+          <div class="ticker-header">CAMPAIGN DISPATCH</div>
+          <div class="ticker-stream" id="ticker-stream">
+            <div class="ticker-item system">Turn 1: Vijayanagara state revenues assessed. Frontiers secure.</div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- 2. TACTICAL VIEW (Instanced 2D Tactical Battlefield)              -->
+    <!-- ================================================================= -->
+    <div id="tactical-view" class="view-container hidden">
+      
+      <!-- Tactical Top Header -->
+      <header class="tactical-header">
+        <div class="tactical-brand">
+          <span class="icon">⚔️</span>
+          <div>
+            <h1 id="tactical-encounter-title">BATTLE OF KRISHNA RIVER</h1>
+            <span class="subtext mono" id="tactical-terrain-intel">Terrain: Floodplains | High Ground: +25% DMG</span>
+          </div>
+        </div>
+
+        <!-- Balance of Power Bar -->
+        <div class="tactical-balance-bar">
+          <div class="balance-labels">
+            <span id="tactical-player-power" class="mono text-cyan">Player: 1,850</span>
+            <span id="tactical-balance-ratio" class="mono text-gold">50% / 50%</span>
+            <span id="tactical-enemy-power" class="mono text-red">Enemy: 1,850</span>
+          </div>
+          <div class="balance-track">
+            <div id="tactical-balance-fill" class="balance-fill" style="width: 50%;"></div>
+          </div>
+        </div>
+
+        <div class="tactical-header-actions">
+          <button id="btn-tactical-retreat" class="btn btn-secondary" title="Sound Tactical Withdrawal">
+            🏃 Sound Retreat
+          </button>
+        </div>
+      </header>
+
+      <!-- Tactical Main Canvas Workspace -->
+      <main class="tactical-workspace">
+        
+        <!-- Left Tactics Panel -->
+        <aside class="panel tactical-left-panel">
+          <div class="panel-header">
+            <h2>DOCTRINAL CARDS</h2>
+            <span class="subtext">Combat Modifiers</span>
+          </div>
+          <div class="cards-dock" id="tactical-cards-dock">
+            <!-- Tactical actions -->
+            <div class="tactical-action-card" data-action="feigned-retreat">
+              <span class="t-icon">🏹</span>
+              <div class="t-title">Feigned Retreat</div>
+              <span class="t-desc">Lure enemy out of formation</span>
+            </div>
+            <div class="tactical-action-card" data-action="elephant-charge">
+              <span class="t-icon">🐘</span>
+              <div class="t-title">Gaja Shock Charge</div>
+              <span class="t-desc">+30 Terror morale shock</span>
+            </div>
+            <div class="tactical-action-card" data-action="shield-wall">
+              <span class="t-icon">🛡️</span>
+              <div class="t-title">Phalanx Shield Wall</div>
+              <span class="t-desc">+50% Defense against frontal cavalry</span>
+            </div>
+          </div>
+
+          <div class="panel-header mt-12">
+            <h2>TACTICAL LEGEND</h2>
+          </div>
+          <div class="tactical-legend-grid">
+            <div class="legend-item"><span class="icon">⛰️</span> High Ground (+25% Dmg)</div>
+            <div class="legend-item"><span class="icon">🌲</span> Dense Jungle (50% Missile Prot)</div>
+            <div class="legend-item"><span class="icon">🌊</span> River Chokepoint (Slow/Flank)</div>
+            <div class="legend-item"><span class="icon">👑</span> General Aura (+2 Morale)</div>
+          </div>
+        </aside>
+
+        <!-- Center Canvas Container -->
+        <section class="tactical-canvas-container">
+          <canvas id="tacticalCanvas" width="1000" height="700"></canvas>
+          
+          <div id="tactical-hover-intel" class="canvas-controls">
+            <span id="tactical-hover-text" class="mono">Hover over regiment or terrain tile for telemetry</span>
+          </div>
+        </section>
+
+        <!-- Right Inspector & Combat Dispatch Panel -->
+        <aside class="panel tactical-right-panel">
+          <div class="panel-header">
+            <h2>REGIMENT TELEMETRY</h2>
+          </div>
+          <div class="unit-inspector" id="tactical-unit-inspector">
+            <div class="empty-state">Select any regiment on the field to inspect combat stats, facing, and morale.</div>
+          </div>
+
+          <div class="panel-header mt-12">
+            <h2>COMBAT DISPATCH</h2>
+          </div>
+          <div class="battle-log" id="tactical-battle-log">
+            <div class="log-entry system">Tactical engagement commenced. Envelop enemy flanks!</div>
+          </div>
+        </aside>
+
+      </main>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- 3. MODAL OVERLAY STACK                                            -->
+    <!-- ================================================================= -->
+
+    <!-- Modal 1: Start Campaign / Faction Select Modal (Audio Unlock Gatekeeper) -->
+    <div id="start-modal" class="modal-overlay">
+      <div class="modal-card start-campaign-card">
+        <div class="start-header">
+          <h1 class="font-title gold">1345 CE: SUBCONTINENT</h1>
+          <p class="start-subtitle">Grand Strategy & Tactical Warfare in Medieval India</p>
+        </div>
+        
+        <div class="faction-picker-section">
+          <h3>CHOOSE YOUR HISTORICAL REALM</h3>
+          <div class="faction-cards-grid" id="start-faction-grid">
+            <!-- Populated with historical factions -->
+          </div>
+        </div>
+
+        <div class="start-actions">
+          <button id="btn-start-campaign" class="btn btn-accent btn-large">
+            ⚔️ COMMENCE CAMPAIGN (ENTER 1345 CE)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 2: Pre-Battle Encounter Dialog -->
+    <div id="battle-modal" class="modal-overlay hidden">
+      <div class="modal-card battle-encounter-card">
+        <div class="modal-header-ornate">
+          <span class="modal-swords">⚔️</span>
+          <h2>HOSTILE ARMY CLASH</h2>
+          <span class="modal-subtitle" id="battle-encounter-location">Province: Krishna River Valley</span>
+        </div>
+
+        <div class="battle-matchup-grid">
+          <!-- Attacking Army Dossier -->
+          <div class="army-side attacker">
+            <div class="side-badge">ATTACKER</div>
+            <div class="commander-card">
+              <div class="commander-avatar" id="battle-attacker-avatar">👑</div>
+              <div class="commander-meta">
+                <div class="commander-name" id="battle-attacker-name">Harihara I</div>
+                <div class="commander-stats mono">Command: 8 | Dread: 4</div>
+              </div>
+            </div>
+            <div class="roster-preview" id="battle-attacker-roster"></div>
+            <div class="power-rating mono" id="battle-attacker-power">Combat Power: 2,400</div>
+          </div>
+
+          <!-- VS Divider & Odds Display -->
+          <div class="matchup-center">
+            <div class="odds-circle">
+              <span class="odds-label">VICTORY CHANCE</span>
+              <span class="odds-val mono" id="battle-win-chance">65%</span>
+            </div>
+            <div class="terrain-buff-box" id="battle-terrain-buffs">
+              <span class="buff-pill">⛰️ High Ground (+25% Dmg)</span>
+              <span class="buff-pill">🌲 Jungle Cover (50% Missile)</span>
+            </div>
+          </div>
+
+          <!-- Defending Army Dossier -->
+          <div class="army-side defender">
+            <div class="side-badge">DEFENDER</div>
+            <div class="commander-card">
+              <div class="commander-avatar" id="battle-defender-avatar">🛡️</div>
+              <div class="commander-meta">
+                <div class="commander-name" id="battle-defender-name">Ala-ud-Din Bahman Shah</div>
+                <div class="commander-stats mono">Command: 8 | Dread: 7</div>
+              </div>
+            </div>
+            <div class="roster-preview" id="battle-defender-roster"></div>
+            <div class="power-rating mono" id="battle-defender-power">Combat Power: 1,950</div>
+          </div>
+        </div>
+
+        <div class="encounter-actions">
+          <button id="btn-battle-autoresolve" class="btn btn-secondary">
+            ⚡ AUTO-RESOLVE BATTLE
+          </button>
+          <button id="btn-battle-manual" class="btn btn-accent">
+            ⚔️ FIGHT TACTICAL BATTLE
+          </button>
+          <button id="btn-battle-retreat" class="btn btn-tertiary">
+            🏃 RETREAT ARMY
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 3: Diplomacy & Treaties Modal -->
+    <div id="diplomacy-modal" class="modal-overlay hidden">
+      <div class="modal-card wide-modal diplomacy-card">
+        <div class="modal-header-bar">
+          <h2>IMPERIAL DIPLOMACY & TREATIES</h2>
+          <button id="btn-close-diplomacy" class="btn-close-icon">✕</button>
+        </div>
+
+        <div class="diplomacy-workspace">
+          <!-- Left: Foreign Realm List -->
+          <aside class="foreign-factions-list" id="diplo-factions-list">
+            <!-- Dynamically rendered foreign factions -->
+          </aside>
+
+          <!-- Center: Selected Faction Dossier -->
+          <section class="diplomatic-dossier" id="diplo-dossier">
+            <div class="dossier-header">
+              <div class="heraldic-shield" id="diplo-shield">🛡️</div>
+              <div>
+                <h3 id="diplo-faction-name">Bahmani Sultanate</h3>
+                <span class="mono text-muted" id="diplo-ruler-title">Sultan Ala-ud-Din Bahman Shah</span>
+              </div>
+              <span class="personality-badge" id="diplo-personality-badge">EXPANSIONIST MILITANT</span>
+            </div>
+
+            <div class="relations-bar-container">
+              <span class="label">Diplomatic Attitude:</span>
+              <span id="diplo-relation-val" class="mono bold text-gold">-25 (Hostile)</span>
+              <div class="progress-bar-bg">
+                <div id="diplo-relation-bar" class="progress-bar-fill" style="width: 37%;"></div>
+              </div>
+            </div>
+
+            <div class="active-treaties-box">
+              <h4>ACTIVE TREATIES</h4>
+              <div id="diplo-active-treaties-list" class="treaties-tags">
+                <span class="treaty-tag none">No active treaties (Open Hostilities)</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Right: Treaty Negotiation & Sweetener Actions -->
+          <aside class="negotiation-panel">
+            <h4>PROPOSE TREATY</h4>
+            <div class="treaty-buttons-grid">
+              <button class="btn-treaty" data-treaty="PEACE">🕊️ Peace Treaty</button>
+              <button class="btn-treaty" data-treaty="NON_AGGRESSION">🛡️ Non-Aggression Pact</button>
+              <button class="btn-treaty" data-treaty="TRADE">💰 Trade Agreement</button>
+              <button class="btn-treaty" data-treaty="ALLIANCE">⚔️ Military Alliance</button>
+              <button class="btn-treaty" data-treaty="VASSALAGE">👑 Demand Vassalage</button>
+            </div>
+
+            <div class="sweetener-box mt-12">
+              <label for="diplo-gold-sweetener">Tribute Sweetener (Gold):</label>
+              <input type="range" id="diplo-gold-sweetener" min="0" max="1000" step="50" value="0">
+              <span id="diplo-sweetener-val" class="mono text-gold">0 Gold</span>
+            </div>
+
+            <div class="acceptance-calc-box mt-12">
+              <span class="label">AI Acceptance Likelihood:</span>
+              <span id="diplo-acceptance-status" class="mono bold text-green">Likely (Score: +42)</span>
+            </div>
+
+            <button id="btn-send-emissary" class="btn btn-accent btn-block mt-12">
+              🕊️ SEND DIPLOMATIC ENVOY
+            </button>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 4: Technology & Doctrines Modal -->
+    <div id="tech-modal" class="modal-overlay hidden">
+      <div class="modal-card wide-modal tech-tree-card">
+        <div class="modal-header-bar">
+          <div>
+            <h2>IMPERIAL TECHNOLOGY & DOCTRINES</h2>
+            <span class="subtext mono" id="tech-rate-indicator">Research Progress: 40 RP / turn</span>
+          </div>
+          <button id="btn-close-tech" class="btn-close-icon">✕</button>
+        </div>
+
+        <!-- Branch Tabs -->
+        <div class="tech-branch-tabs">
+          <button class="tab-btn active" data-branch="MILITARY">⚔️ Military Doctrines</button>
+          <button class="tab-btn" data-branch="CIVIL">🏛️ Administrative Statecraft</button>
+          <button class="tab-btn" data-branch="SIEGE">🛡️ Siege & Metallurgy</button>
+        </div>
+
+        <!-- Tech Tree Graph / Grid View -->
+        <div class="tech-tree-workspace" id="tech-tree-workspace">
+          <!-- 4 Tiers of Technology Nodes dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 5: Character Ledger & Court Modal -->
+    <div id="character-modal" class="modal-overlay hidden">
+      <div class="modal-card wide-modal character-ledger-card">
+        <div class="modal-header-bar">
+          <h2>IMPERIAL COURT & CHARACTER LEDGER</h2>
+          <button id="btn-close-characters" class="btn-close-icon">✕</button>
+        </div>
+
+        <!-- Ledger Filter Bar -->
+        <div class="character-filter-bar">
+          <button class="filter-btn active" data-role="all">All Characters</button>
+          <button class="filter-btn" data-role="RULER">Rulers</button>
+          <button class="filter-btn" data-role="GENERAL">Generals</button>
+          <button class="filter-btn" data-role="GOVERNOR">Governors</button>
+          <button class="filter-btn" data-role="IDLE">Unassigned</button>
+        </div>
+
+        <!-- Characters Grid -->
+        <div class="characters-grid" id="characters-ledger-grid">
+          <!-- Dynamically populated cards with attributes, traits, loyalty bar, assignment -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 6: Save / Load State Modal -->
+    <div id="save-load-modal" class="modal-overlay hidden">
+      <div class="modal-card save-load-card">
+        <div class="modal-header-bar">
+          <h2>CAMPAIGN CHRONICLES (SAVE / LOAD)</h2>
+          <button id="btn-close-saveload" class="btn-close-icon">✕</button>
+        </div>
+
+        <div class="save-load-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button id="btn-quick-save" class="btn btn-accent">💾 Quick Save (Browser)</button>
+          <button id="btn-quick-load" class="btn btn-secondary">📂 Quick Load (Browser)</button>
+          <button id="btn-server-save" class="btn btn-accent" style="background:#0284c7; border-color:#38bdf8;">💾 Save to Disk (/saves)</button>
+          <button id="btn-server-load" class="btn btn-secondary" style="border-color:#38bdf8; color:#38bdf8;">📂 Load from Disk</button>
+        </div>
+        <div id="server-saves-list" class="mt-12 hidden" style="background:rgba(0,0,0,0.5); border:1px solid #38bdf8; border-radius:6px; padding:8px; max-height:140px; overflow-y:auto;">
+          <div class="text-muted" style="font-size:0.75rem;">Loading disk saves...</div>
+        </div>
+
+        <div class="export-import-section mt-16">
+          <h3>EXPORT / IMPORT DETERMINISTIC JSON</h3>
+          <textarea id="save-json-textarea" placeholder="Campaign JSON data will appear here or paste save string..."></textarea>
+          <div class="json-button-row">
+            <button id="btn-export-json" class="btn btn-sm btn-secondary">📋 Export JSON to Clipboard</button>
+            <button id="btn-import-json" class="btn btn-sm btn-accent">📥 Load Pasted JSON</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div> <!-- End #app -->
+
+  <!-- Zero-Compilation ES6 Module Script Entry Point -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

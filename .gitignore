@@ -1,0 +1,10 @@
+# Save games and user states
+saves/
+*.log
+
+# Caches & Editors
+.agents/
+.freebuff/
+.vscode/
+.idea/
+.DS_Store
