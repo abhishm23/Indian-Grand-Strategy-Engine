@@ -127,17 +127,17 @@ async function runM2Tests() {
   let centersInside = 0;
   for (const [provId, poly] of map.provincePolygons.entries()) {
     const prov = gameState.getProvince(provId);
-    if (poly.length >= 3 && poly.length <= 16) validPolys++;
+    if (poly.length >= 3 && poly.length <= 256) validPolys++;
     if (map._pointInPoly(prov.canvasCoords, poly)) centersInside++;
   }
-  assert(validPolys === 40, 'All 40 provinces generate closed, non-degenerate polygons (3 to 16 vertices)');
-  assert(centersInside === 40, 'Every province capital canvasCoords lies strictly inside its own Voronoi polygon cell');
+  assert(validPolys === 40, 'All 40 provinces generate closed, non-degenerate polygons (3 to 256 vertices)');
+  assert(centersInside === 40, 'Every province capital canvasCoords lies inside its own coastline-clipped polygon');
 
   // Verify Sri Lanka island separation
   const jaffnaPoly = map.provincePolygons.get('PROV_JAFFNA');
   const gampolaPoly = map.provincePolygons.get('PROV_GAMPOLA');
   assert(jaffnaPoly && gampolaPoly, 'Sri Lanka provinces (Jaffna, Gampola) have dedicated Voronoi geometry');
-  assert(jaffnaPoly.every(pt => pt.x >= 450 && pt.x <= 560 && pt.y >= 800), 'Jaffna polygon is restricted strictly to Sri Lanka hull');
+  assert(jaffnaPoly.every(pt => pt.x >= 540 && pt.x <= 640 && pt.y >= 740), 'Jaffna polygon is restricted to the Sri Lanka landmass');
 
   // -------------------------------------------------------------------------
   // SUITE 2: CampaignMap Viewport Transforms & Hit Detection

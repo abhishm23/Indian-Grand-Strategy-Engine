@@ -389,7 +389,16 @@ describe('Auto-Resolve Integration — GameState Integration & Campaign Triggers
     const defArmy = gs.createArmy('FAC_BAHMANI', 'PROV_GULBARGA', [reg2], null, 'Token Garrison');
     const prov = gs.getProvince('PROV_GULBARGA');
 
-    const rawRes = autoResolveBattle(atkArmy, defArmy, prov, gs);
+    // autoResolveBattle decides the winner with a Math.random() roll, so pin the
+    // roll low to exercise the victory path deterministically instead of flaking.
+    const realRandom = Math.random;
+    let rawRes;
+    Math.random = () => 0;
+    try {
+      rawRes = autoResolveBattle(atkArmy, defArmy, prov, gs);
+    } finally {
+      Math.random = realRandom;
+    }
     assertTrue(rawRes.attackerWins, 'Attacker achieves victory');
 
     const res = applyBattleOutcome(gs, rawRes);

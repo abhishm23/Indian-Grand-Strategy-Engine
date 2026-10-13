@@ -8,6 +8,8 @@
  */
 
 import { areProvincesAdjacent } from '../data/provinces.js';
+import { COASTLINE, RIVERS, LAKES, RANGES } from '../data/geography.js';
+import { PROVINCE_POLYGONS } from '../data/province-polygons.js';
 
 export class CampaignMap {
   /**
@@ -82,50 +84,28 @@ export class CampaignMap {
   // =========================================================================
 
   _initBoundaryMesh() {
-    const MAINLAND_HULL = [
-      { x: 60, y: 70 }, { x: 200, y: 40 }, { x: 350, y: 50 }, { x: 500, y: 80 },
-      { x: 700, y: 110 }, { x: 920, y: 200 }, { x: 1040, y: 230 }, { x: 1100, y: 380 },
-      { x: 1100, y: 580 }, { x: 1000, y: 600 }, { x: 920, y: 530 }, { x: 860, y: 470 },
-      { x: 740, y: 520 }, { x: 650, y: 640 }, { x: 540, y: 750 }, { x: 480, y: 860 },
-      { x: 440, y: 890 }, { x: 330, y: 870 }, { x: 290, y: 740 }, { x: 220, y: 550 },
-      { x: 140, y: 430 }, { x: 50, y: 320 }, { x: 50, y: 180 }
-    ];
-
-    const SRI_LANKA_HULL = [
-      { x: 470, y: 835 }, { x: 530, y: 840 }, { x: 555, y: 885 },
-      { x: 535, y: 925 }, { x: 495, y: 920 }, { x: 465, y: 875 }
-    ];
-
+    // Province polygons are precomputed at build time by tools/build_geodata.py:
+    // Voronoi cells around real province anchors, clipped to the Natural Earth
+    // coastline. This replaces the old hand-drawn MAINLAND_HULL mesh, so every
+    // border now follows real geography. See js/data/province-polygons.js.
     const provinces = this.gameState && this.gameState.provinces
       ? Object.values(this.gameState.provinces)
       : [];
 
     for (const prov of provinces) {
-      const isSL = (prov.id === 'PROV_JAFFNA' || prov.id === 'PROV_GAMPOLA');
-      let poly = isSL ? [...SRI_LANKA_HULL] : [...MAINLAND_HULL];
-      const peers = provinces.filter(p => isSL
-        ? (p.id === 'PROV_JAFFNA' || p.id === 'PROV_GAMPOLA')
-        : (p.id !== 'PROV_JAFFNA' && p.id !== 'PROV_GAMPOLA')
-      );
-
-      for (const other of peers) {
-        if (other.id === prov.id) continue;
-        const bisector = this._getBisector(prov.canvasCoords, other.canvasCoords);
-        poly = this._clipPolygon(poly, bisector.p1, bisector.p2);
-      }
-
+      const flat = PROVINCE_POLYGONS[prov.id];
+      if (!flat || flat.length < 3) continue;
+      const poly = flat.map(([x, y]) => ({ x, y }));
       this.provincePolygons.set(prov.id, poly);
 
       // Build cached Path2D if running in browser
       if (typeof Path2D !== 'undefined') {
         const path = new Path2D();
-        if (poly.length > 0) {
-          path.moveTo(poly[0].x, poly[0].y);
-          for (let i = 1; i < poly.length; i++) {
-            path.lineTo(poly[i].x, poly[i].y);
-          }
-          path.closePath();
+        path.moveTo(poly[0].x, poly[0].y);
+        for (let i = 1; i < poly.length; i++) {
+          path.lineTo(poly[i].x, poly[i].y);
         }
+        path.closePath();
         this.provincePaths.set(prov.id, path);
       }
     }
@@ -286,7 +266,7 @@ export class CampaignMap {
     // 1. Clear Screen & Draw Ocean Background
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#0a0e17'; // Deep nautical slate navy
+    ctx.fillStyle = '#b9cdd4'; // Parchment-washed sea, matches the basemap plate
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.restore();
 
@@ -300,6 +280,9 @@ export class CampaignMap {
 
     // 4. Render Province Base Terrains
     this._renderProvinceTerrains(ctx);
+
+    // 4b. Named physiographic regions (Himalaya, Deccan, Thar...)
+    this._renderRangeLabels(ctx);
 
     // 5. Render Faction Political Tints & Highlighting
     this._renderFactionTints(ctx);
@@ -328,7 +311,7 @@ export class CampaignMap {
 
   _drawNauticalGrid(ctx) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.05)';
+    ctx.strokeStyle = 'rgba(92, 72, 42, 0.12)';
     ctx.lineWidth = 1;
     for (let x = 0; x <= this.worldWidth; x += 150) {
       ctx.beginPath();
@@ -346,37 +329,117 @@ export class CampaignMap {
   }
 
   _renderProvinceTerrains(ctx) {
-    const TERRAIN_BASE_COLORS = {
-      MOUNTAIN_PASS: '#2B3544',
-      FLOODPLAIN: '#1E381E',
-      JUNGLE: '#064E3B',
-      ARID_PLATEAU: '#78350F',
-      COASTAL_PORT: '#0C4A6E',
-      HIGHLAND_HILLS: '#573A16',
-      DESERT_WASTELAND: '#854D0E',
-      RIVER_DELTA: '#134E4A'
-    };
+    this._renderBasemap(ctx);
+  }
 
-    for (const [id, poly] of this.provincePolygons.entries()) {
-      const prov = this.gameState.getProvince(id);
-      if (!prov || poly.length < 3) continue;
+  _coastPath() {
+    if (this._coastPathCache !== undefined) return this._coastPathCache;
+    if (typeof Path2D === 'undefined') { this._coastPathCache = null; return null; }
+    const path = new Path2D();
+    for (const ring of COASTLINE) {
+      if (!ring || ring.length < 3) continue;
+      path.moveTo(ring[0][0], ring[0][1]);
+      for (let i = 1; i < ring.length; i++) path.lineTo(ring[i][0], ring[i][1]);
+      path.closePath();
+    }
+    this._coastPathCache = path;
+    return path;
+  }
 
+  _reliefImage(src) {
+    if (!this._reliefCache) this._reliefCache = {};
+    if (this._reliefCache[src] !== undefined) return this._reliefCache[src];
+    let img = null;
+    if (typeof Image !== 'undefined') {
+      img = new Image();
+      img.onload = () => this.render();
+      img.src = src;
+    }
+    this._reliefCache[src] = img;
+    return img;
+  }
+
+  _renderBasemap(ctx) {
+    const W = this.worldWidth;
+    const H = this.worldHeight;
+    const coast = this._coastPath();
+
+    // 1. Sea: parchment-washed slate, so land and water read apart at a glance
+    ctx.save();
+    ctx.fillStyle = '#b9cdd4';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
+    if (!coast) return;
+
+    // 2. Land plate
+    ctx.save();
+    ctx.fillStyle = '#e9e0c6';
+    ctx.fill(coast);
+
+    // 3. Relief raster, clipped to land so the sea stays clean
+    const relief = this._reliefImage('assets/relief-hypsometric.png');
+    if (relief && relief.complete && relief.naturalWidth > 0) {
       ctx.save();
-      const path = this.provincePaths.get(id);
-
-      // Base terrain fill
-      ctx.fillStyle = TERRAIN_BASE_COLORS[prov.terrainType] || '#334155';
-      if (path && typeof ctx.fill === 'function') {
-        try { ctx.fill(path); } catch (_) { this._fillPolygon(ctx, poly); }
-      } else {
-        this._fillPolygon(ctx, poly);
-      }
-
-      // Distinct Terrain Glyph Vectors
-      this._drawTerrainGlyphs(ctx, prov, poly);
-
+      ctx.clip(coast);
+      ctx.globalAlpha = this.activeLayer === 'terrain' ? 0.92 : 0.42;
+      ctx.drawImage(relief, 0, 0, W, H);
       ctx.restore();
     }
+
+    // 4. Hillshade on top, multiplied for real 3D relief
+    const shade = this._reliefImage('assets/relief-hillshade.png');
+    if (shade && shade.complete && shade.naturalWidth > 0) {
+      ctx.save();
+      ctx.clip(coast);
+      const prevOp = ctx.globalCompositeOperation;
+      if (typeof ctx.globalCompositeOperation === 'string') {
+        ctx.globalCompositeOperation = 'multiply';
+      }
+      ctx.globalAlpha = this.activeLayer === 'terrain' ? 0.85 : 0.5;
+      ctx.drawImage(shade, 0, 0, W, H);
+      ctx.globalCompositeOperation = prevOp;
+      ctx.restore();
+    }
+
+    // 5. Rivers
+    ctx.save();
+    ctx.clip(coast);
+    ctx.strokeStyle = 'rgba(74, 122, 158, 0.85)';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (const river of RIVERS) {
+      const pts = river.points;
+      if (!pts || pts.length < 2) continue;
+      ctx.lineWidth = river.rank <= 3 ? 2.2 : (river.rank <= 6 ? 1.4 : 0.9);
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 6. Lakes
+    ctx.save();
+    ctx.fillStyle = 'rgba(94, 140, 176, 0.8)';
+    for (const ring of LAKES) {
+      if (!ring || ring.length < 3) continue;
+      ctx.beginPath();
+      ctx.moveTo(ring[0][0], ring[0][1]);
+      for (let i = 1; i < ring.length; i++) ctx.lineTo(ring[i][0], ring[i][1]);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 7. Coastline ink
+    ctx.save();
+    ctx.strokeStyle = 'rgba(92, 72, 42, 0.9)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke(coast);
+    ctx.restore();
+
+    ctx.restore();
   }
 
   _drawTerrainGlyphs(ctx, prov, poly) {
@@ -468,6 +531,23 @@ export class CampaignMap {
     ctx.restore();
   }
 
+  _renderRangeLabels(ctx) {
+    if (!RANGES || !RANGES.length) return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'italic 600 12px Cinzel, Georgia, serif';
+    for (const r of RANGES) {
+      const label = String(r.name || '').toUpperCase();
+      if (!label) continue;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillText(label, r.x + 1, r.y + 1);
+      ctx.fillStyle = 'rgba(104, 82, 50, 0.92)';
+      ctx.fillText(label, r.x, r.y);
+    }
+    ctx.restore();
+  }
+
   _renderFactionTints(ctx) {
     for (const [id, poly] of this.provincePolygons.entries()) {
       const prov = this.gameState.getProvince(id);
@@ -483,7 +563,11 @@ export class CampaignMap {
 
       // Faction Primary Color Tint
       ctx.fillStyle = customColor || (faction ? faction.primaryColor : '#475569');
-      ctx.globalAlpha = isSelected ? 0.52 : (isHovered ? 0.44 : 0.32);
+      // Political mode leans on the tint; terrain and trade modes recede so the
+      // relief raster and resource badges can carry the map instead.
+      const layerBase = this.activeLayer === 'terrain' ? 0.12
+        : (this.activeLayer === 'resources' ? 0.20 : 0.34);
+      ctx.globalAlpha = isSelected ? 0.55 : (isHovered ? 0.46 : layerBase);
 
       if (path && typeof ctx.fill === 'function') {
         try { ctx.fill(path); } catch (_) { this._fillPolygon(ctx, poly); }
